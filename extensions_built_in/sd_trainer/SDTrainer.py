@@ -555,7 +555,15 @@ class SDTrainer(BaseSDTrainProcess):
                     prior_mask_multiplier = 1.0 - prior_mask
                     
                     # scale so it is a mean of 1
-                    prior_mask_multiplier = prior_mask_multiplier / prior_mask_multiplier.mean()
+                    # Guard against masks that average to (or close to) zero which would
+                    # otherwise introduce infinities when normalizing the mask.
+                    prior_mask_mean = prior_mask_multiplier.mean()
+                    if torch.isfinite(prior_mask_mean):
+                        eps = torch.finfo(prior_mask_multiplier.dtype).eps
+                        if torch.abs(prior_mask_mean) > eps:
+                            prior_mask_multiplier = prior_mask_multiplier / prior_mask_mean
+                    else:
+                        prior_mask_multiplier = torch.ones_like(prior_mask_multiplier)
                 if hasattr(self.sd, 'get_loss_target'):
                     target = self.sd.get_loss_target(
                         noise=noise, 
@@ -1325,7 +1333,15 @@ class SDTrainer(BaseSDTrainProcess):
                     mask_multiplier = mask_multiplier.expand(-1, noisy_latents.shape[1], -1, -1)
                     mask_multiplier = mask_multiplier.to(self.device_torch, dtype=dtype).detach()
                     # make avg 1.0
-                    mask_multiplier = mask_multiplier / mask_multiplier.mean()
+                    # Guard against masks that average to (or close to) zero which would
+                    # otherwise introduce infinities when normalizing the mask.
+                    mask_mean = mask_multiplier.mean()
+                    if torch.isfinite(mask_mean):
+                        eps = torch.finfo(mask_multiplier.dtype).eps
+                        if torch.abs(mask_mean) > eps:
+                            mask_multiplier = mask_multiplier / mask_mean
+                    else:
+                        mask_multiplier = torch.ones_like(mask_multiplier)
 
         def get_adapter_multiplier():
             if self.adapter and isinstance(self.adapter, T2IAdapter):
