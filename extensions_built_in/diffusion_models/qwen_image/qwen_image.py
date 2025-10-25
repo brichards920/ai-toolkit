@@ -460,7 +460,7 @@ class QwenImageModel(BaseModel):
         if self.vae.device != device or self.vae.dtype != self.vae_torch_dtype:
             self.vae = self.vae.to(device, dtype=self.vae_torch_dtype)
 
-        latents = latents.to(device)
+        latents = latents.to(device, dtype=self.vae_torch_dtype)
         if latents.dim() == 4:
             latents = latents.unsqueeze(2)
         elif latents.dim() != 5:
@@ -468,7 +468,6 @@ class QwenImageModel(BaseModel):
                 f"Expected 4D or 5D latents for Qwen Image decode, received shape {latents.shape}"
             )
 
-        latents = latents.float()
         latents_mean = (
             torch.tensor(self.vae.config.latents_mean, dtype=torch.float32)
             .view(1, self.vae.config.z_dim, 1, 1, 1)
@@ -482,6 +481,17 @@ class QwenImageModel(BaseModel):
 
         latents = latents * latents_std + latents_mean
         images = self.vae.decode(latents, return_dict=False)[0][:, :, 0]
-        images = images.to(device, dtype=dtype)
+
+        # Convert into a normalised image tensor before handing the result back to
+        # the caller.  The WAN VAE used by Qwen returns values in the -1..1 range
+        # which, when written directly to disk for preview purposes, results in a
+        # completely black image.  Bringing the values into 0..1 matches the
+        # diffusers pipeline behaviour and keeps previews faithful to the final
+        # outputs.
+        images = images.to(device, dtype=self.vae_torch_dtype)
+        images = (images / 2 + 0.5).clamp_(0, 1)
+
+        if dtype is not None and dtype != self.vae_torch_dtype:
+            images = images.to(device, dtype=dtype)
 
         return images
