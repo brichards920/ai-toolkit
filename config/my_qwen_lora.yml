@@ -1,0 +1,59 @@
+---
+job: extension
+config:
+  name: "my_qwen_lora_2"
+  process:
+    - type: 'sd_trainer'
+      training_folder: "output"
+      device: cuda:0
+
+      network:
+        type: "lora"
+        linear: 16
+        linear_alpha: 16
+
+      save:
+        dtype: float16
+        save_every: 300
+        max_step_saves_to_keep: 4
+
+      datasets:
+        - folder_path: "../lora_training/data/images"
+          caption_ext: "txt"
+          resolution: [1024]
+          cache_latents_to_disk: true
+          caption_dropout_rate: 0.05
+
+      train:
+        steps: 4000
+        batch_size: 1
+        gradient_accumulation: 1
+        gradient_checkpointing: true
+        cache_text_embeddings: true
+        train_unet: true
+        train_text_encoder: false
+        optimizer: "adamw8bit"
+        lr: 1.5e-5
+        noise_scheduler: "flowmatch"
+        dtype: bf16
+        dataloader_num_workers: 6
+
+      model:
+        name_or_path: "../models/diffusion_models/qwen_image_fp8_e4m3fn.safetensors"
+        extras_name_or_path: "../models"
+        arch: "qwen_image"
+        quantize: false
+        low_vram: false
+        vae: autoencoder
+
+      sample:
+        sampler: "flowmatch"
+        sample_every: 300
+        width: 832
+        height: 1216
+        prompts:
+          - "a scenic sunset"
+        neg: ""
+        seed: 42
+        guidance_scale: 4
+        sample_steps: 30
