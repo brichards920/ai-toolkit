@@ -1,0 +1,26 @@
+root@n9okks42pg:/notebooks# ls -R models
+models:
+audio_encoders  controlnet  diffusion_models  loras  model_patches  text_encoder  text_encoders  tokenizer  vae
+
+models/audio_encoders:
+put_audio_encoder_models_here
+
+models/controlnet:
+qwenImageControlnets_instantxCNAIO.safetensors
+
+models/diffusion_models:
+qwen_image_fp8_e4m3fn.safetensors
+
+models/loras:
+
+models/model_patches:
+put_model_patches_here
+
+models/text_encoders:
+config.json  model.safetensors  qwen_2.5_vl_7b_fp8_scaled.safetensors  text_encoders
+
+models/tokenizer:
+added_tokens.json  chat_template.jinja  merges.txt  special_tokens_map.json  tokenizer_config.json  vocab.json
+
+models/vae:
+config.json  diffusion_pytorch_model.safetensors  qwen_image_vae.safetensors  wan_2.1_vae.safetensors
