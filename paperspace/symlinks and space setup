@@ -1,0 +1,24 @@
+# 1) Make sure filenames are what HF expects
+# text encoder weight should be models/text_encoder/model.safetensors
+!ln -sf /notebooks/models/text_encoder/qwen_2.5_vl_7b_fp8_scaled.safetensors \
+        /notebooks/models/text_encoder/model.safetensors
+
+# vae weight should be models/vae/diffusion_pytorch_model.safetensors
+!ln -sf /notebooks/models/vae/qwen_image_vae.safetensors \
+        /notebooks/models/vae/diffusion_pytorch_model.safetensors
+
+# 2) Fetch the missing config.json files for TE and VAE
+!pip install -q huggingface_hub
+!mkdir -p /notebooks/tmp_qwen
+
+# download only the needed configs
+!hf download Qwen/Qwen-Image --local-dir /notebooks/tmp_qwen --include "text_encoder/config.json" "vae/config.json"
+
+# 3) Put them where AI Toolkit looks
+!mkdir -p /notebooks/models/text_encoder /notebooks/models/vae
+!cp /notebooks/tmp_qwen/text_encoder/config.json /notebooks/models/text_encoder/config.json
+!cp /notebooks/tmp_qwen/vae/config.json           /notebooks/models/vae/config.json
+
+# (optional) verify the folder contents
+!ls -lh /notebooks/models/text_encoder
+!ls -lh /notebooks/models/vae
