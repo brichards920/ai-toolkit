@@ -1,0 +1,46 @@
+unning 1 job
+Error running job: expected 'except' or 'finally' block (qwen_image.py, line 466)
+Error running on_error: cannot access local variable 'job' where it is not associated with a value
+
+========================================
+Result:
+ - 0 completed jobs
+ - 1 failure
+========================================
+Traceback (most recent call last):
+  File "/notebooks/ai-toolkit/run.py", line 120, in <module>
+    main()
+  File "/notebooks/ai-toolkit/run.py", line 108, in main
+    raise e
+  File "/notebooks/ai-toolkit/run.py", line 95, in main
+    job = get_job(config_file, args.name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/notebooks/ai-toolkit/toolkit/job.py", line 29, in get_job
+    return ExtensionJob(config)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/notebooks/ai-toolkit/jobs/ExtensionJob.py", line 12, in __init__
+    self.process_dict = get_all_extensions_process_dict()
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/notebooks/ai-toolkit/toolkit/extension.py", line 53, in get_all_extensions_process_dict
+    all_extensions = get_all_extensions()
+                     ^^^^^^^^^^^^^^^^^^^^
+  File "/notebooks/ai-toolkit/toolkit/extension.py", line 39, in get_all_extensions
+    module = importlib.import_module(f"{sub_dir}.{name}")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/notebooks/ai-toolkit/extensions_built_in/diffusion_models/__init__.py", line 7, in <module>
+    from .qwen_image import QwenImageModel, QwenImageEditModel, QwenImageEditPlusModel
+  File "/notebooks/ai-toolkit/extensions_built_in/diffusion_models/qwen_image/__init__.py", line 1, in <module>
+    from .qwen_image import QwenImageModel
+  File "/notebooks/ai-toolkit/extensions_built_in/diffusion_models/qwen_image/qwen_image.py", line 466
+    vae = AutoencoderKL.from_single_file('notebooks/models/vae/qwen_image_vae.safetensors').to('cuda', dtype=torch.bfloat16)
+    ^^^
+SyntaxError: expected 'except' or 'finally' block
