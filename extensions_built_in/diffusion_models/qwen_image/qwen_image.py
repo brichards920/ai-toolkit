@@ -168,9 +168,15 @@ class QwenImageModel(BaseModel):
             flush()
 
         self.print_and_status_update("Loading VAE")
+        vae_dtype = torch.float32 if dtype in (torch.float16, torch.bfloat16) else dtype
         vae = AutoencoderKLQwenImage.from_pretrained(
-            base_model_path, subfolder="vae", torch_dtype=dtype
+            base_model_path, subfolder="vae", torch_dtype=vae_dtype
         )
+        # the VAE exhibits numerical instability in lower precision dtypes. Always
+        # keep track of the dtype we actually load the module with so downstream
+        # helpers use the same precision when running on Paperspace.  This avoids
+        # NaNs while training or decoding previews.
+        self.vae_torch_dtype = vae.dtype
 
         self.noise_scheduler = QwenImageModel.get_train_scheduler()
 
@@ -427,17 +433,55 @@ class QwenImageModel(BaseModel):
         latents = self.vae.encode(images).latent_dist.sample()
 
         latents_mean = (
-            torch.tensor(self.vae.config.latents_mean)
+            torch.tensor(self.vae.config.latents_mean, dtype=torch.float32)
             .view(1, self.vae.config.z_dim, 1, 1, 1)
-            .to(latents.device, latents.dtype)
+            .to(latents.device)
         )
-        latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(
-            1, self.vae.config.z_dim, 1, 1, 1
-        ).to(latents.device, latents.dtype)
+        latents_std = (
+            torch.tensor(self.vae.config.latents_std, dtype=torch.float32)
+            .view(1, self.vae.config.z_dim, 1, 1, 1)
+            .to(latents.device)
+        ).clamp_min(1e-6)
 
-        latents = (latents - latents_mean) * latents_std
+        latents = latents.float()
+        latents = (latents - latents_mean) / latents_std
         latents = latents.to(device, dtype=dtype)
 
         latents = latents.squeeze(2)  # remove the frame count dimension
 
         return latents
+
+    def decode_latents(self, latents: torch.Tensor, device=None, dtype=None):
+        if device is None:
+            device = self.vae_device_torch
+        if dtype is None:
+            dtype = self.torch_dtype
+
+        if self.vae.device != device or self.vae.dtype != self.vae_torch_dtype:
+            self.vae = self.vae.to(device, dtype=self.vae_torch_dtype)
+
+        latents = latents.to(device)
+        if latents.dim() == 4:
+            latents = latents.unsqueeze(2)
+        elif latents.dim() != 5:
+            raise ValueError(
+                f"Expected 4D or 5D latents for Qwen Image decode, received shape {latents.shape}"
+            )
+
+        latents = latents.float()
+        latents_mean = (
+            torch.tensor(self.vae.config.latents_mean, dtype=torch.float32)
+            .view(1, self.vae.config.z_dim, 1, 1, 1)
+            .to(latents.device)
+        )
+        latents_std = (
+            torch.tensor(self.vae.config.latents_std, dtype=torch.float32)
+            .view(1, self.vae.config.z_dim, 1, 1, 1)
+            .to(latents.device)
+        ).clamp_min(1e-6)
+
+        latents = latents * latents_std + latents_mean
+        images = self.vae.decode(latents, return_dict=False)[0][:, :, 0]
+        images = images.to(device, dtype=dtype)
+
+        return images
