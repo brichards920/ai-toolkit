@@ -1,0 +1,97 @@
+from pathlib import Path
+import shutil, re
+
+p = Path("/notebooks/ai-toolkit/extensions_built_in/diffusion_models/qwen_image/qwen_image.py")
+backup = p.with_suffix(".bak_reset")
+shutil.copy(p, backup)
+print(f"💾 Backup saved to {backup}")
+
+src = p.read_text().splitlines()
+out = []
+
+for line in src:
+    if 'AutoencoderKL.from_pretrained' in line and 'Qwen2-VL' in line:
+        indent = re.match(r'^(\s*)', line).group(1)
+        out.append(f"{indent}from diffusers import AutoencoderKL")
+        out.append(f"{indent}import torch")
+        out.append(f"{indent}try:")
+        out.append(f"{indent}    vae = AutoencoderKL.from_single_file(")
+        out.append(f"{indent}        'notebooks/models/vae/qwen_image_vae.safetensors')")
+        out.append(f"{indent}    ).to('cuda', dtype=torch.bfloat16)")
+        out.append(f"{indent}    print('[Patch] Local VAE loaded successfully')")
+        out.append(f"{indent}except Exception as e:")
+        out.append(f"{indent}    print(f'[Patch] Local VAE load failed: {{e}}')")
+    else:
+        out.append(line)
+
+p.write_text("\n".join(out))
+print("✅ Minimal patch applied cleanly.")
+
+
+
+from pathlib import Path
+import shutil
+
+path = Path("/notebooks/ai-toolkit/extensions_built_in/diffusion_models/qwen_image/qwen_image.py")
+backup = path.with_suffix(".bak_final")
+
+if not backup.exists():
+    shutil.copy(path, backup)
+    print(f"💾 Backup saved to {backup}")
+
+lines = path.read_text().splitlines()
+new_lines = []
+for line in lines:
+    # Comment out any Qwen2-VL or AutoencoderKL.from_pretrained() VAE calls
+    if "AutoencoderKL.from_pretrained" in line and "Qwen2-VL" in line:
+        new_lines.append("# " + line + "  # ⛔ Disabled old remote VAE loader")
+        new_lines.append("vae = AutoencoderKL.from_single_file('notebooks/models/vae/qwen_image_vae.safetensors').to('cuda', dtype=torch.bfloat16)")
+        new_lines.append("print('[Patch-Final] Forced local VAE loaded successfully')")
+    else:
+        new_lines.append(line)
+
+path.write_text("\n".join(new_lines))
+print("✅ Remote VAE loader replaced with local file reference")
+
+
+from pathlib import Path
+import shutil
+import re
+
+target = Path("/notebooks/ai-toolkit/extensions_built_in/diffusion_models/qwen_image/qwen_image.py")
+backup = target.with_suffix(".bak_clean")
+
+if not backup.exists():
+    shutil.copy(target, backup)
+    print(f"💾 Backup saved to {backup}")
+
+text = target.read_text().splitlines()
+out = []
+inside_old_block = False
+
+for line in text:
+    # find the old block (try/AutoencoderKL.from_pretrained ... Qwen2-VL)
+    if re.search(r"AutoencoderKL\.from_pretrained.*Qwen2\-VL", line):
+        inside_old_block = True
+        out.append("        # --- Patched local VAE loader ---")
+        out.append("        from diffusers import AutoencoderKL")
+        out.append("        import torch")
+        out.append("        try:")
+        out.append("            vae = AutoencoderKL.from_single_file(")
+        out.append("                'notebooks/models/vae/qwen_image_vae.safetensors'")
+        out.append("            ).to('cuda', dtype=torch.bfloat16)")
+        out.append("            print('[Patch-Final] Forced local VAE loaded successfully')")
+        out.append("        except Exception as e:")
+        out.append("            print(f'[Patch-Final] Local VAE load failed: {e}')")
+        out.append("        # --- End patch ---")
+        continue
+    if inside_old_block:
+        # stop skipping after leaving the old section
+        if line.strip().startswith("except") or line.strip().startswith("finally") or line.strip() == "":
+            inside_old_block = False
+        continue
+    out.append(line)
+
+target.write_text("\n".join(out))
+print("✅ Clean replacement of VAE loader block completed.")
+
