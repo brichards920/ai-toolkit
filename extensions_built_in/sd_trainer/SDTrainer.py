@@ -1907,6 +1907,13 @@ class SDTrainer(BaseSDTrainProcess):
                             original_samples = batch.latents.to(self.device_torch, dtype=dtype)
                             # todo calc next timestep, for now this may work as it
                             t_01 = (stepped_timesteps / 1000).to(original_samples.device)
+                            # t_01 can end up as 0 when the scheduler reaches the last step.
+                            # This will cause divisions by zero a few lines below which then
+                            # propagate NaNs into the loss.  Clamp to a small positive epsilon
+                            # so we maintain numerical stability without meaningfully changing
+                            # the step value.
+                            eps = torch.finfo(t_01.dtype).eps
+                            t_01 = torch.clamp(t_01, min=eps)
                             if len(stepped_latents.shape) == 4:
                                 t_01 = t_01.view(-1, 1, 1, 1)
                             elif len(stepped_latents.shape) == 5:
