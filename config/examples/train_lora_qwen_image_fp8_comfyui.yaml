@@ -42,10 +42,9 @@ config:
         name_or_path: "../models/diffusion_models/qwen_image_fp8_e4m3fn.safetensors"
         extras_name_or_path: "../models"
         arch: "qwen_image"
-        quantize: true
-        qtype: "float8"
-        quantize_te: true
-        qtype_te: "float8"
+        quantize: false
+        quantize_te: false
+        te_dtype: float32
         low_vram: false
         vae: autoencoder
 

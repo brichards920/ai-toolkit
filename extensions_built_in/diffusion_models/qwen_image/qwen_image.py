@@ -34,6 +34,15 @@ from tqdm import tqdm
 if TYPE_CHECKING:
     from toolkit.data_transfer_object.data_loader import DataLoaderBatchDTO
 
+FLOAT8_DTYPES = tuple(
+    dtype
+    for dtype in (
+        getattr(torch, "float8_e4m3fn", None),
+        getattr(torch, "float8_e5m2", None),
+    )
+    if dtype is not None
+)
+
 scheduler_config = {
     "base_image_seq_len": 256,
     "base_shift": 0.5,
@@ -81,6 +90,29 @@ class QwenImageModel(BaseModel):
     def get_bucket_divisibility(self):
         return 16 * 2  # 16 for the VAE, 2 for patch size
 
+    @staticmethod
+    def _maybe_upcast_tensor(tensor: torch.Tensor):
+        if isinstance(tensor, QTensor):
+            return tensor.dequantize().to(torch.float32), True
+        if FLOAT8_DTYPES and tensor.dtype in FLOAT8_DTYPES:
+            return tensor.to(torch.float32), True
+        return tensor, False
+
+    @classmethod
+    def _upcast_module_if_needed(cls, module: torch.nn.Module) -> bool:
+        converted = False
+        for name, param in module.named_parameters(recurse=True):
+            new_data, was_converted = cls._maybe_upcast_tensor(param.data)
+            if was_converted:
+                param.data = new_data
+                converted = True
+        for name, buf in module.named_buffers(recurse=True):
+            new_buf, was_converted = cls._maybe_upcast_tensor(buf)
+            if was_converted:
+                module._buffers[name] = new_buf
+                converted = True
+        return converted
+
     def load_model(self):
         dtype = self.torch_dtype
         self.print_and_status_update("Loading Qwen Image model")
@@ -102,6 +134,10 @@ class QwenImageModel(BaseModel):
                 subfolder="transformer",
                 torch_dtype=model_dtype,
             )
+            if self._upcast_module_if_needed(transformer):
+                self.print_and_status_update(
+                    "Detected pre-quantized transformer weights. Upcasting to float32 before training"
+                )
             transformer.to(model_dtype)
 
         else:
@@ -140,11 +176,18 @@ class QwenImageModel(BaseModel):
 
         self.print_and_status_update("Text Encoder")
         tokenizer = Qwen2Tokenizer.from_pretrained(
-            base_model_path, subfolder="tokenizer", torch_dtype=dtype
+            base_model_path, subfolder="tokenizer"
         )
+
         text_encoder = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            base_model_path, subfolder="text_encoder", torch_dtype=dtype
+            base_model_path,
+            subfolder="text_encoder",
+            torch_dtype=self.te_torch_dtype,
         )
+        if self._upcast_module_if_needed(text_encoder):
+            self.print_and_status_update(
+                "Detected pre-quantized text encoder weights. Upcasting to float32 before caching"
+            )
 
         # remove the visual model as it is not needed for image generation
         self.processor = None
@@ -158,7 +201,7 @@ class QwenImageModel(BaseModel):
                 offload_percent=self.model_config.layer_offloading_text_encoder_percent
             )
 
-        text_encoder.to(self.device_torch, dtype=dtype)
+        text_encoder.to(self.device_torch, dtype=self.te_torch_dtype)
         flush()
 
         if self.model_config.quantize_te:
@@ -218,7 +261,7 @@ class QwenImageModel(BaseModel):
 
         flush()
         # just to make sure everything is on the right device and dtype
-        text_encoder[0].to(self.device_torch)
+        text_encoder[0].to(self.device_torch, dtype=self.te_torch_dtype)
         text_encoder[0].requires_grad_(False)
         text_encoder[0].eval()
         flush()
